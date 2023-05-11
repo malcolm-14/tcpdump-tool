@@ -1,37 +1,44 @@
 import argparse
 import sys
 import os
-import xlsxwriter
+from xlsxwriter import Workbook
 from scapy.utils import RawPcapReader
 from scapy.layers.l2 import Ether
 from scapy.layers.inet import IP, TCP
 
 
-def parse_data(opts):
-    pass
+def __build_header(src_urls, dst_urls):
+    return f"{str(src_urls)} -> {str(dst_urls)}"
 
 
-def process_pcap(pcapfile, opts):
-    workbook = xlsxwriter.Workbook()
-
-    with xlsxwriter.Workbook() as workbook:
+def process_pcap(opts):
+    with Workbook(opts.dst_file) as workbook:
         worksheet = workbook.add_worksheet()
-        packets = RawPcapReader(pcapfile)
-        for (pkt_data, pkt_metadata,) in packets:
 
+        row_header = __build_header(opts.srcurls, opts.dsturls)
+        worksheet.write(0, 0, row_header)
+
+        packets = RawPcapReader(opts.pcap_file)
+        nline = 1
+        pkts_length = 0
+        for (pkt_data, pkt_metadata,) in packets:
             ether_pkt = Ether(pkt_data)
             packet_fields = ether_pkt.fields
 
             if 'type' not in ether_pkt.fields:
                 continue
-                
-            if packet_fields['dst'] not in opts.resurls:
+
+            if len(opts.srcurls) != 0 and packet_fields['src'] not in opts.srcurls:
                 continue
 
-            if packet_fields['scc'] not in opts.dsturls:
+            if len(opts.dsturls) != 0 and packet_fields['dst'] not in opts.dsturls:
                 continue
 
-            worksheet.write(nline, 0, )
+            nline += 1
+            pkts_length = pkt_metadata.caplen
+            worksheet.write(nline, 0, pkts_length)
+            worksheet.write(nline, 1, packet_fields['src'])
+            worksheet.write(nline, 2, packet_fields['dst'])
 
 
 
@@ -39,7 +46,8 @@ def process_pcap(pcapfile, opts):
 def __create_argparser():
     parser = argparse.ArgumentParser(prog='tcpdump-parser', add_help=True)
 
-    parser.add_argument('--pcapfile', required=True)
+    parser.add_argument('--pcap-file', required=True)
+    parser.add_argument('--dst-file', default='pcap_xlsx.xlsx')
     parser.add_argument('--srcurls', type=str, default=[], nargs='+')
     parser.add_argument('--dsturls', type=str, default=[], nargs='+')
     parser.add_argument('-i', '--interval', default=2, type=int, help='Capture info about packets from spec interval')
@@ -51,12 +59,11 @@ def main(*args):
     parser = __create_argparser()
     opts = parser.parse_args(*args)
 
-    file_name = opts.pcapfile
-    if not os.path.isfile(file_name):
-        print('"{}" does not exist'.format(file_name), file=sys.stderr)
+    if not os.path.isfile(opts.pcap_file):
+        print('"{}" does not exist'.format(opts.pcapf_ile), file=sys.stderr)
         sys.exit(-1)
 
-    process_pcap(file_name)
+    process_pcap(opts)
     sys.exit(0)
 
 
